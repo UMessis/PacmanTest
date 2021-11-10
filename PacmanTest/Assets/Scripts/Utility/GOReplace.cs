@@ -1,9 +1,8 @@
 using UnityEngine;
 using UnityEditor;
-using System.Collections;
+
 // CopyComponents - by Michael L. Croswell for Colorado Game Coders, LLC
 // March 2010
-
 //Modified by Kristian Helle Jespersen
 //June 2011
 
@@ -14,8 +13,6 @@ public class ReplaceGameObjects : ScriptableWizard
     public GameObject[] OldObjects;
 
     [MenuItem("Custom/Replace GameObjects")]
-
-
     static void CreateWizard()
     {
         ScriptableWizard.DisplayWizard("Replace GameObjects", typeof(ReplaceGameObjects), "Replace");
@@ -23,8 +20,7 @@ public class ReplaceGameObjects : ScriptableWizard
 
     void OnWizardCreate()
     {
-        //Transform[] Replaces;
-        //Replaces = Replace.GetComponentsInChildren<Transform>();
+        int counter = 0;
 
         foreach (GameObject go in OldObjects)
         {
@@ -33,10 +29,10 @@ public class ReplaceGameObjects : ScriptableWizard
             newObject.transform.position = go.transform.position;
             newObject.transform.rotation = go.transform.rotation;
             newObject.transform.parent = go.transform.parent;
+            newObject.name += counter;
+            counter++;
 
             DestroyImmediate(go);
-
         }
-
     }
 }
