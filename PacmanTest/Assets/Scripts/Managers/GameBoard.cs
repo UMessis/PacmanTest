@@ -13,7 +13,7 @@ public class GameBoard : MonoBehaviour
 
         foreach (GameObject obj in objects)
         {
-            //Ignore if object is pacman or UI
+            //Ignore if object is pacman or UI or a node
             if (obj.tag == "Player" || obj.layer == 5)
             {
                 continue;

@@ -17,6 +17,7 @@ public class PlayerMovement : MonoBehaviour
     {
         CheckInput();
         MovePlayer();
+        ConsumeDot();
     }
 
     void CheckInput()
@@ -46,10 +47,28 @@ public class PlayerMovement : MonoBehaviour
     {
         if (targetNode != currentNode && targetNode != null)
         {
+            //Check to move backwards
+            if (nextDirection == currentDirection * -1)
+            {
+                currentDirection = nextDirection;
+
+                Node temp = targetNode;
+                targetNode = previousNode;
+                previousNode = temp;
+            }
+
             if (OverShotTarget())
             {
                 currentNode = this.targetNode;
                 transform.position = currentNode.transform.position;
+
+                GameObject recievePortal = GetPortal(currentNode.transform.position);
+
+                if (recievePortal != null)
+                {
+                    transform.position = recievePortal.transform.position;
+                    currentNode = recievePortal.GetComponent<Node>();
+                }
 
                 //Check for target of pre-move
                 Node targetNode = CanMove(nextDirection);
@@ -107,6 +126,25 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    void ConsumeDot()
+    {
+        GameObject obj = GetTileAtPosition(transform.position);
+
+        if (obj != null)
+        {
+            Tile tile = obj.GetComponent<Tile>();
+
+            if (tile != null)
+            {
+                if (!tile.isConsumed && (tile.isDot || tile.isBigDot))
+                {
+                    tile.GetComponent<SpriteRenderer>().enabled = false;
+                    tile.isConsumed = true;
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Returns the target node if the move is possible, otherwise returns null
     /// </summary>
@@ -145,6 +183,21 @@ public class PlayerMovement : MonoBehaviour
         return null;
     }
 
+    GameObject GetTileAtPosition(Vector2 pos)
+    {
+        int tileX = (int)pos.x;
+        int tileY = (int)pos.y;
+
+        GameObject tile = GameObject.Find("GameManager").GetComponent<GameBoard>().board[tileX, tileY];
+
+        if (tile != null)
+        {
+            return tile;
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Returns whether or not the player has reached it's destination
     /// </summary>
@@ -166,5 +219,24 @@ public class PlayerMovement : MonoBehaviour
     {
         Vector2 temp = targetPos - (Vector2)previousNode.transform.position;
         return temp.sqrMagnitude;
+    }
+
+    GameObject GetPortal (Vector2 pos)
+    {
+        GameObject tile = GameObject.Find("GameManager").GetComponent<GameBoard>().board[(int)pos.x, (int)pos.y];
+
+        if (tile != null)
+        {
+            if (tile.GetComponent<Tile>() != null)
+            {
+                if (tile.GetComponent<Tile>().isPortal)
+                {
+                    GameObject recievePortal = tile.GetComponent<Tile>().portalReciever;
+                    return recievePortal;
+                }
+            }
+        }
+
+        return null;
     }
 }

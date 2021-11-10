@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Dot
   - Wall
+  - Node
   layers:
   - Default
   - TransparentFX
