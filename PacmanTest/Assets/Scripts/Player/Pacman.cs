@@ -1,20 +1,34 @@
 using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
-public class PlayerMovement : MonoBehaviour
+public class Pacman : MonoBehaviour
 {
-    [SerializeField] float playerSpeed = 5;
+    [SerializeField] float playerSpeed = 6;
+    [SerializeField] int numLives = 3;
+    [SerializeField] float enrageDuration = 5;
+    [SerializeField] Node startNode;
 
     Vector2 currentDirection, nextDirection;
     Node currentNode, previousNode, targetNode;
+    int currentLives;
+    bool isPlayerEnraged = false;
+
+    GameBoard gameBoard;
 
     void Start()
     {
-        currentNode = GetNodeAtPosition(transform.position);
+        currentNode = startNode;
+        transform.position = startNode.transform.position;
         ChangeDirection(Vector2.left);
+        currentLives = numLives;
+        gameBoard = GameObject.Find("GameManager").GetComponent<GameBoard>();
+        gameBoard.livesText.text = numLives.ToString() + " lives left";
     }
 
     void Update()
     {
+        CheckForCollision();
         CheckInput();
         MovePlayer();
         ConsumeDot();
@@ -39,10 +53,7 @@ public class PlayerMovement : MonoBehaviour
             ChangeDirection(Vector2.down);
         }
     }
-    
-    /// <summary>
-    /// Move the player towards it's target node
-    /// </summary>
+
     void MovePlayer()
     {
         if (targetNode != currentNode && targetNode != null)
@@ -57,38 +68,33 @@ public class PlayerMovement : MonoBehaviour
                 previousNode = temp;
             }
 
-            if (OverShotTarget())
+            //If target reached, check for premove or stop the player
+            if (HasReachedDest())
             {
                 currentNode = this.targetNode;
                 transform.position = currentNode.transform.position;
 
+                //If reached node is a portal, teleport the player
                 GameObject recievePortal = GetPortal(currentNode.transform.position);
-
                 if (recievePortal != null)
                 {
                     transform.position = recievePortal.transform.position;
                     currentNode = recievePortal.GetComponent<Node>();
                 }
 
-                //Check for target of pre-move
                 Node targetNode = CanMove(nextDirection);
 
-                //If not possible, check if can keep going straight
                 if (targetNode == null)
                 {
                     targetNode = CanMove(currentDirection);
-                }
-
-                //If possible, move that direction
-                if (targetNode != null)
+                } 
+                else if (targetNode != null)
                 {
                     currentDirection = nextDirection;
                     this.targetNode = targetNode;
                     previousNode = currentNode;
                     currentNode = null;
                 }
-
-                //Otherwise stop moving
                 else
                 {
                     currentDirection = Vector2.zero;
@@ -101,17 +107,15 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Change the direction of the player
-    /// </summary>
-    /// <param name="dir"></param>
     void ChangeDirection(Vector2 dir)
     {
+        //Set premove
         if (dir != currentDirection)
         {
             nextDirection = dir;
         }
 
+        //If player is not currently moving
         if (currentNode != null)
         {
             Node targetNode = CanMove(dir);
@@ -128,28 +132,83 @@ public class PlayerMovement : MonoBehaviour
 
     void ConsumeDot()
     {
-        GameObject obj = GetTileAtPosition(transform.position);
+        Tile tile = GetTileAtPosition(transform.position);
 
-        if (obj != null)
+        if (tile != null)
         {
-            Tile tile = obj.GetComponent<Tile>();
-
-            if (tile != null)
+            if (!tile.isConsumed && (tile.isDot || tile.isBigDot))
             {
-                if (!tile.isConsumed && (tile.isDot || tile.isBigDot))
+                tile.GetComponent<SpriteRenderer>().enabled = false;
+                tile.isConsumed = true;
+                gameBoard.ConsumedDot();
+
+                if (tile.isBigDot)
                 {
-                    tile.GetComponent<SpriteRenderer>().enabled = false;
-                    tile.isConsumed = true;
+                    StopCoroutine(EnrageTimer());
+                    StartCoroutine(EnrageTimer());
                 }
             }
         }
     }
 
-    /// <summary>
-    /// Returns the target node if the move is possible, otherwise returns null
-    /// </summary>
-    /// <param name="dir"></param>
-    /// <returns></returns>
+    IEnumerator EnrageTimer()
+    {
+        isPlayerEnraged = true;
+        gameBoard.enragedText.enabled = true;
+
+        yield return new WaitForSeconds(enrageDuration);
+
+        isPlayerEnraged = false;
+        gameBoard.enragedText.enabled = false;
+    }
+
+    void CheckForCollision()
+    {
+        int posX = (int)transform.position.x;
+        int posY = (int)transform.position.y;
+
+        Ghost ghost = gameBoard.ghostPositions[posX, posY];
+
+        if (ghost != null)
+        {
+            if (!isPlayerEnraged)
+            {
+                PlayerDeath();
+            }
+            else
+            {
+                ghost.GhostDeath();
+            }
+        }
+    }
+
+    void PlayerDeath()
+    {
+        currentLives--;
+        gameBoard.livesText.text = currentLives.ToString() + " lives left";
+
+        if (currentLives <= 0)
+        {
+            gameBoard.GameOver();
+        }
+        else
+        {
+            transform.position = gameBoard.playerRespawnNode.transform.position;
+            currentNode = gameBoard.playerRespawnNode;
+            targetNode = null;
+            previousNode = null;
+        }
+    }
+
+    public void ResetPlayer()
+    {
+        currentNode = startNode;
+        transform.position = startNode.transform.position;
+        targetNode = null;
+        previousNode = null;
+        ChangeDirection(Vector2.left);
+    }
+
     Node CanMove(Vector2 dir)
     {
         Node targetNode = null;
@@ -166,43 +225,22 @@ public class PlayerMovement : MonoBehaviour
         return targetNode;
     }
 
-    /// <summary>
-    /// Returns the node at the position of the player
-    /// </summary>
-    /// <param name="pos"></param>
-    /// <returns></returns>
-    Node GetNodeAtPosition(Vector2 pos)
-    {
-        GameObject tile = GameObject.Find("GameManager").GetComponent<GameBoard>().board[(int)pos.x, (int)pos.y];
-        
-        if (tile != null)
-        {
-            return tile.GetComponent<Node>();
-        }
-
-        return null;
-    }
-
-    GameObject GetTileAtPosition(Vector2 pos)
+    Tile GetTileAtPosition(Vector2 pos)
     {
         int tileX = (int)pos.x;
         int tileY = (int)pos.y;
 
-        GameObject tile = GameObject.Find("GameManager").GetComponent<GameBoard>().board[tileX, tileY];
+        GameObject tile = gameBoard.board[tileX, tileY];
 
         if (tile != null)
         {
-            return tile;
+            return tile.GetComponent<Tile>();
         }
 
         return null;
     }
 
-    /// <summary>
-    /// Returns whether or not the player has reached it's destination
-    /// </summary>
-    /// <returns></returns>
-    bool OverShotTarget()
+    bool HasReachedDest()
     {
         float nodeToTarget = DistanceFromNode(targetNode.transform.position);
         float nodeToSelf = DistanceFromNode(transform.localPosition);
@@ -210,20 +248,15 @@ public class PlayerMovement : MonoBehaviour
         return nodeToSelf > nodeToTarget;
     }
 
-    /// <summary>
-    /// Returns the distance from a point to the previous node
-    /// </summary>
-    /// <param name="targetPos"></param>
-    /// <returns></returns>
     float DistanceFromNode(Vector2 targetPos)
     {
-        Vector2 temp = targetPos - (Vector2)previousNode.transform.position;
-        return temp.sqrMagnitude;
+        Vector2 dist = targetPos - (Vector2)previousNode.transform.position;
+        return dist.sqrMagnitude;
     }
 
     GameObject GetPortal (Vector2 pos)
     {
-        GameObject tile = GameObject.Find("GameManager").GetComponent<GameBoard>().board[(int)pos.x, (int)pos.y];
+        GameObject tile = gameBoard.board[(int)pos.x, (int)pos.y];
 
         if (tile != null)
         {
